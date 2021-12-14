@@ -150,9 +150,9 @@ def __edge_descriptor__(im, cell_size, sigma, gaussian_before):
         DM_list = [filters.gaussian_filter(DM_k, sigma=sigma) for DM_k in DM_list]
 
     # DEBUGGING
-    for DM_k in DM_list:
-        plt.figure()
-        plt.imshow(DM_k, cmap='gray')
+    # for DM_k in DM_list:
+    #     plt.figure()
+    #     plt.imshow(DM_k, cmap='gray')
 
     # "We divide into p overlapping blocks and calculate the feature vector of each block"
     # "K is the stride between two neighbor blocks"
@@ -185,9 +185,9 @@ def __edge_descriptor__(im, cell_size, sigma, gaussian_before):
                 block_vector.append(center_pixel)
         feature_vector.extend(block_vector / np.linalg.norm(block_vector))
     
-    assert len(feature_vector) == DM_blocks[0].shape[0] * 16, 'Shape mismatch'
+    assert len(feature_vector) == DM_blocks[0].shape[0] * 16, 'Shape mismatch on edge descriptor'
 
-    return feature_vector
+    return np.asarray(feature_vector), DM_list
 
 def __texture_descriptor__(im, n_scales=4, n_orientations=6, N=16):
     All_Aos = []
@@ -206,12 +206,25 @@ def __texture_descriptor__(im, n_scales=4, n_orientations=6, N=16):
     MIM = np.argmax(All_Aos, axis=0)
 
     # DEBUGGING
-    plt.figure()
-    plt.imshow(MIM, cmap='gray')
+    # plt.figure()
+    # plt.imshow(MIM, cmap='gray')
 
-    return MIM
+    # Divide into 6x6 sub-grids
+    blocks = __window_nd__(MIM, (6, 6), steps=6).reshape(-1, 6, 6)
 
-def get_descriptor(im, cell_size, sigma, gaussian_before, n_scales, n_orientations, N):
-    edge_vector = __edge_descriptor__(im, cell_size, sigma, gaussian_before)
-    texture_vector = __texture_descriptor__(im, n_scales, n_orientations, N)
-    # return np.hstack((edge_vector, texture_vector))
+    feature_vector = []
+    for block in blocks:
+        hist, _ = np.histogram(block, n_orientations)
+        feature_vector.append(hist)
+
+    feature_vector = feature_vector / np.linalg.norm(feature_vector)
+
+    return feature_vector.flatten(), MIM
+
+def get_descriptor(im, cell_size, sigma, gaussian_before, n_scales, n_orientations, N, sampling_interval):
+    edge_vector, _ = __edge_descriptor__(im, cell_size, sigma, gaussian_before)
+    texture_vector, _ = __texture_descriptor__(im, n_scales, n_orientations, N)
+
+    # print(type(edge_vector), type(texture_vector), len(edge_vector), len(texture_vector), edge_vector.shape, texture_vector.shape)
+    return np.concatenate((edge_vector, texture_vector))[::sampling_interval]
+    # return texture_vector[::sampling_interval]
