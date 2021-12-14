@@ -183,11 +183,16 @@ def __edge_descriptor__(im, cell_size, sigma, gaussian_before):
             for DM_block_idx in range(len(DM_blocks)):
                 center_pixel = DM_blocks[DM_block_idx][current_block_idx, row_coord, col_coord]
                 block_vector.append(center_pixel)
+        # feature_vector.append(block_vector / np.linalg.norm(block_vector))
+        l2_norm = np.linalg.norm(block_vector)
+        if l2_norm <= 0:
+            l2_norm = 1
         feature_vector.extend(block_vector / np.linalg.norm(block_vector))
     
-    assert len(feature_vector) == DM_blocks[0].shape[0] * 16, 'Shape mismatch on edge descriptor'
+    # assert len(feature_vector) == DM_blocks[0].shape[0] * 16, 'Shape mismatch on edge descriptor'
 
     return np.asarray(feature_vector), DM_list
+    # return feature_vector, DM_list
 
 def __texture_descriptor__(im, n_scales=4, n_orientations=6, N=16):
     All_Aos = []
@@ -220,11 +225,38 @@ def __texture_descriptor__(im, n_scales=4, n_orientations=6, N=16):
     feature_vector = feature_vector / np.linalg.norm(feature_vector)
 
     return feature_vector.flatten(), MIM
+    # return list(feature_vector), MIM
 
 def get_descriptor(im, cell_size, sigma, gaussian_before, n_scales, n_orientations, N, sampling_interval):
+    # Color to grayscale (if needed)
+    if len(im.shape) == 3:
+        im = np.mean(im, axis=2)
+
+    # Uniform Sampling
+    im = im[::sampling_interval[0], ::sampling_interval[1]]
+
+    # Feature descriptors
     edge_vector, _ = __edge_descriptor__(im, cell_size, sigma, gaussian_before)
     texture_vector, _ = __texture_descriptor__(im, n_scales, n_orientations, N)
 
-    # print(type(edge_vector), type(texture_vector), len(edge_vector), len(texture_vector), edge_vector.shape, texture_vector.shape)
-    return np.concatenate((edge_vector, texture_vector))[::sampling_interval]
-    # return texture_vector[::sampling_interval]
+    # print(type(edge_vector), type(texture_vector), len(edge_vector), len(texture_vector), len(edge_vector[0]), len(texture_vector[0]))
+    
+    # # edge_vector.extend(texture_vector)
+    # return edge_vector
+    return np.concatenate((edge_vector, texture_vector))
+
+if __name__ == '__main__':
+    from PIL import Image
+    im = np.array(Image.open('photographer.jpg'))
+    if len(im.shape) == 3:
+        im = np.mean(im, axis=2)
+
+    print(f'im.shape={im.shape}')
+    des1 = get_descriptor(im, cell_size=32, sigma=1, gaussian_before=False, n_scales=4, n_orientations=6, N=32, sampling_interval=(1,1))
+
+    import cv2 as cv
+    sift = cv.SIFT_create()
+    kp, des2 = sift.detectAndCompute(im, None)
+
+    print(f'HOET Descriptors={len(des1)}, Descriptor Lengths={len(des1[0])} and {len(des1[-1])}, Example={des1[0]}')
+    print(f'SIFT Descriptors={len(des2)}, Descriptor Lengths={len(des2[0])}, Example={des2[0]}')
